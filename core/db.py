@@ -6,6 +6,7 @@ SQLite 持久化层（JSON/TXT 仅用于首次迁移）。
 """
 import hashlib
 import json
+import os
 import sqlite3
 import threading
 import uuid
@@ -40,7 +41,7 @@ _CODEX_AGENT_DIR = _PROJECT_ROOT / "codex_agent_accounts"
 # 仅供一次性迁移旧导出状态，运行期间不再读取该文件。
 _LEGACY_CODEX_EXPORT_STATE = _PROJECT_ROOT / "codex_导出状态.json"
 # SQLite 是运行时唯一业务数据主存储；旧 JSON/TXT 仅用于一次性迁移。
-_SQLITE_PATH = _PROJECT_ROOT / "turb.sqlite3"
+_SQLITE_PATH = Path(os.environ.get("TURB_DATA_DIR", str(_PROJECT_ROOT))).expanduser().resolve() / "turb.sqlite3"
 _SQLITE_LOCK = threading.RLock()
 _SQLITE_READY = False
 _TABLES = {
@@ -79,6 +80,7 @@ def _ensure_storage() -> None:
 def _sqlite_conn() -> sqlite3.Connection:
     """创建短生命周期连接；WAL 允许 WebUI 读与注册线程写并行。"""
     _ensure_storage()
+    _active_sqlite_path().parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(_active_sqlite_path()), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=30000")

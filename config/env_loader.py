@@ -13,7 +13,8 @@ import re
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_ENV_PATH = _PROJECT_ROOT / ".env"
+_DATA_DIR = Path(os.environ.get("TURB_DATA_DIR", str(_PROJECT_ROOT))).expanduser().resolve()
+_ENV_PATH = _DATA_DIR / ".env"
 _LOADED = False
 
 # 这些多行列表字段允许用空值显式覆盖为 []。
@@ -191,6 +192,7 @@ def write_env_values(updates: dict[str, str]) -> list[str]:
             written.append(key)
 
     text = "\n".join(out_lines).rstrip() + "\n"
+    _ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = _ENV_PATH.with_suffix(".env.tmp")
     tmp.write_text(text, encoding="utf-8")
     tmp.replace(_ENV_PATH)
