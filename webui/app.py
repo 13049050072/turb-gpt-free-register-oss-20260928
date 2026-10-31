@@ -26,8 +26,22 @@ from urllib.parse import urlparse
 from flask import Flask, Response, jsonify, make_response, render_template, request
 import pyotp
 
-from core import (codex_retry_service, db, plan_check_service, codex_agent_service, live_check_service,
-                  upi_live_feed, upi_zero_web_service)
+from core import (codex_retry_service, db, plan_check_service, codex_agent_service, live_check_service)
+
+# These integrations are optional in the sanitized distribution.  Do not hide
+# failures of dependencies imported *inside* an available integration module.
+import importlib
+
+def _optional_core_module(name):
+    try:
+        return importlib.import_module(f"core.{name}")
+    except ModuleNotFoundError as exc:
+        if exc.name != f"core.{name}":
+            raise
+        return None
+
+upi_live_feed = _optional_core_module("upi_live_feed")
+upi_zero_web_service = _optional_core_module("upi_zero_web_service")
 from webui.auth import init_auth, register_auth_routes
 from core import registration_service as svc
 from webui import config_editor
@@ -1158,6 +1172,8 @@ def create_app(auth_code: str | None = None) -> Flask:
 
     @app.get("/api/upi-zero/candidates")
     def api_upi_zero_candidates():
+        if upi_zero_web_service is None:
+            return jsonify({"ok": False, "error": "UPI module unavailable"}), 503
         try:
             page = int(request.args.get("page", "1"))
             page_size = int(request.args.get("page_size", "50"))
@@ -1172,6 +1188,8 @@ def create_app(auth_code: str | None = None) -> Flask:
 
     @app.post("/api/upi-zero/extract")
     def api_upi_zero_extract():
+        if upi_zero_web_service is None:
+            return jsonify({"ok": False, "error": "UPI module unavailable"}), 503
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return jsonify({"ok": False, "error": "请求体无效"}), 400
@@ -1197,6 +1215,8 @@ def create_app(auth_code: str | None = None) -> Flask:
 
     @app.get("/api/upi-zero/status/<int:account_id>")
     def api_upi_zero_status(account_id: int):
+        if upi_zero_web_service is None:
+            return jsonify({"ok": False, "error": "UPI module unavailable"}), 503
         if account_id not in upi_zero_web_service.source_ids():
             return jsonify({"ok": False, "error": "账号不在零元池"}), 404
         acc = db.get_account(account_id)
@@ -1208,6 +1228,8 @@ def create_app(auth_code: str | None = None) -> Flask:
 
     @app.get("/api/upi-zero/log/<int:account_id>")
     def api_upi_zero_log(account_id: int):
+        if upi_zero_web_service is None:
+            return jsonify({"ok": False, "error": "UPI module unavailable"}), 503
         try:
             after = int(request.args.get("after", "0"))
             if after < 0:
@@ -1227,6 +1249,8 @@ def create_app(auth_code: str | None = None) -> Flask:
 
     @app.get("/api/upi-zero/live-log")
     def api_upi_zero_live_log():
+        if upi_live_feed is None:
+            return jsonify({"ok": False, "error": "UPI module unavailable"}), 503
         """全池提链的实时日志尾巴：读 sweep 自己的日志文件，增量返回。"""
         try:
             after = int(request.args.get("after", "0"))
